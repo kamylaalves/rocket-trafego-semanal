@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rocket Consórcios — Relatório Semanal de Tráfego</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    color-scheme: light;
+    --surface-1:#fcfcfb; --page:#f2f3f5; --primary:#0b0b0b; --secondary:#52514e;
+    --muted:#898781; --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
+    --blue:#2a78d6; --blue-strong:#184f95; --orange:#eb6834; --aqua:#1baf7a; --yellow:#eda100;
+    --violet:#4a3aa7; --red:#e34948;
+    --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+    --seq-250:#86b6ef; --seq-350:#5598e7; --seq-450:#2a78d6; --seq-550:#1c5cab; --seq-650:#104281;
+    --card-radius:14px;
+    font-family: system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--page);color:var(--primary);}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px 20px 64px;}
+  header.app{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
+  header.app h1{font-size:20px;margin:0;}
+  header.app .sub{color:var(--secondary);font-size:13px;margin-top:2px;}
+  .card{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--card-radius);padding:18px 20px;}
+  .grid{display:grid;gap:14px;}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));}
+  .kpi{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--card-radius);padding:14px 16px;}
+  .kpi .label{font-size:12px;color:var(--secondary);margin-bottom:6px;}
+  .kpi .value{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;}
+  .kpi .value.good{color:var(--good);}
+  .kpi .value.critical{color:var(--critical);}
+  section{margin-bottom:26px;}
+  section h2{font-size:15px;margin:0 0 12px;color:var(--secondary);text-transform:uppercase;letter-spacing:.04em;font-weight:600;}
+  .weeknav{display:flex;align-items:center;gap:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:999px;padding:6px 6px 6px 14px;}
+  .weeknav button{border:none;background:transparent;font-size:16px;cursor:pointer;color:var(--secondary);padding:4px 10px;border-radius:999px;}
+  .weeknav button:hover{background:var(--page);}
+  .weeknav .label{font-weight:600;font-size:14px;min-width:190px;text-align:center;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding:8px 10px;border-bottom:1px solid var(--grid);}
+  td{padding:8px 10px;border-bottom:1px solid var(--grid);vertical-align:middle;}
+  tfoot td{font-weight:700;border-bottom:none;border-top:1px solid var(--baseline);}
+  input,select,textarea{font-family:inherit;font-size:14px;border:1px solid var(--baseline);border-radius:8px;padding:7px 9px;background:var(--surface-1);color:var(--primary);}
+  input[type=number]{width:80px;font-variant-numeric:tabular-nums;}
+  input.name-input{width:100%;min-width:180px;}
+  .row-actions{display:flex;gap:6px;}
+  button.btn{font-family:inherit;border:none;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer;background:var(--blue);color:#fff;}
+  button.btn:hover{background:var(--blue-strong);}
+  button.btn.secondary{background:transparent;border:1px solid var(--baseline);color:var(--primary);}
+  button.btn.danger{background:transparent;color:var(--critical);border:1px solid var(--critical);}
+  button.btn.small{padding:5px 10px;font-size:13px;}
+  .funnel{display:flex;flex-direction:column;gap:8px;}
+  .funnel-row{display:grid;grid-template-columns:150px 1fr 90px;align-items:center;gap:12px;}
+  .funnel-row .stage-label{font-size:13px;color:var(--secondary);}
+  .funnel-bar-track{background:var(--page);border-radius:6px;height:28px;position:relative;overflow:hidden;}
+  .funnel-bar-fill{height:100%;border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;transition:width .3s;}
+  .funnel-row .pct{font-size:12px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;}
+  .side-callouts{display:flex;gap:22px;margin-top:6px;flex-wrap:wrap;}
+  .callout{font-size:13px;color:var(--secondary);display:flex;align-items:center;gap:6px;}
+  .callout .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .bars{display:flex;flex-direction:column;gap:10px;}
+  .bar-item{display:grid;grid-template-columns:210px 1fr 90px;align-items:center;gap:10px;font-size:13px;}
+  .bar-item .name{color:var(--secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bar-track{background:var(--page);border-radius:5px;height:16px;}
+  .bar-fill{height:100%;border-radius:5px;background:var(--seq-450);}
+  .bar-item .val{text-align:right;font-variant-numeric:tabular-nums;color:var(--primary);font-weight:600;}
+  form.inline{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:14px;}
+  form.inline label{display:flex;flex-direction:column;font-size:12px;color:var(--secondary);gap:4px;}
+  .status-pill{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600;}
+  .status-pill.ativo{background:rgba(12,163,12,0.12);color:var(--good);}
+  .status-pill.pausado{background:rgba(137,135,129,0.15);color:var(--muted);}
+  #login-screen{max-width:400px;margin:80px auto;text-align:center;}
+  #login-screen h1{font-size:20px;}
+  #login-screen p{color:var(--secondary);font-size:14px;}
+  #login-screen input{width:100%;margin:14px 0;padding:10px 12px;}
+  #login-screen button{width:100%;}
+  #login-msg{font-size:13px;margin-top:10px;color:var(--secondary);min-height:18px;}
+  #app-shell{display:none;}
+  .muted-small{font-size:12px;color:var(--muted);}
+  .top-bar-actions{display:flex;gap:10px;align-items:center;}
+  @media (max-width:640px){
+    .funnel-row,.bar-item{grid-template-columns:110px 1fr 60px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <h1>Rocket Consórcios</h1>
+  <p>Relatório semanal de tráfego — acesso restrito.<br>Digite seu e-mail para receber um link de acesso.</p>
+  <input id="login-email" type="email" placeholder="seu@rocketsf.com.br" autocomplete="email">
+  <button class="btn" id="login-btn" onclick="sendMagicLink()">Enviar link de acesso</button>
+  <div id="login-msg"></div>
+</div>
+
+<div id="app-shell">
+  <div class="wrap">
+    <header class="app">
+      <div>
+        <h1>Relatório Semanal de Tráfego</h1>
+        <div class="sub">Rocket Consórcios</div>
+      </div>
+      <div class="top-bar-actions">
+        <span class="muted-small" id="user-email"></span>
+        <button class="btn secondary small" onclick="logout()">Sair</button>
+      </div>
+    </header>
+
+    <section>
+      <div class="weeknav">
+        <button onclick="changeWeek(-1)" title="Semana anterior">←</button>
+        <div class="label" id="week-label">—</div>
+        <button onclick="changeWeek(1)" title="Próxima semana">→</button>
+        <button class="btn secondary small" style="margin-left:auto" onclick="goToCurrentWeek()">Semana atual</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Resumo da semana</h2>
+      <div class="grid kpis">
+        <div class="kpi"><div class="label">Investido</div><div class="value" id="kpi-spend">—</div></div>
+        <div class="kpi"><div class="label">Leads recebidos</div><div class="value" id="kpi-leads">—</div></div>
+        <div class="kpi"><div class="label">Ligações atendidas</div><div class="value" id="kpi-calls">—</div></div>
+        <div class="kpi"><div class="label">Reuniões marcadas</div><div class="value" id="kpi-meetings">—</div></div>
+        <div class="kpi"><div class="label">Propostas</div><div class="value" id="kpi-proposals">—</div></div>
+        <div class="kpi"><div class="label">Fechamentos</div><div class="value good" id="kpi-won">—</div></div>
+        <div class="kpi"><div class="label">Taxa de conversão</div><div class="value" id="kpi-rate">—</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Funil comercial da semana</h2>
+      <div class="card">
+        <div class="funnel" id="funnel-chart"></div>
+        <div class="side-callouts" id="funnel-side"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Atualização diária do funil</h2>
+      <div class="card">
+        <form class="inline" onsubmit="return saveDailyFunnel(event)">
+          <label>Dia <input type="date" id="df-day" required></label>
+          <label>Ligação atendida <input type="number" min="0" id="df-answered" value="0"></label>
+          <label>Ligação não atendida <input type="number" min="0" id="df-not-answered" value="0"></label>
+          <label>Reunião marcada <input type="number" min="0" id="df-meetings" value="0"></label>
+          <label>Proposta apresentada <input type="number" min="0" id="df-proposals" value="0"></label>
+          <label>Fechamento (ganho) <input type="number" min="0" id="df-won" value="0"></label>
+          <label>Perda <input type="number" min="0" id="df-lost" value="0"></label>
+          <label style="flex:1;min-width:200px">Observações <input type="text" id="df-notes" placeholder="opcional"></label>
+          <button class="btn" type="submit">Salvar dia</button>
+        </form>
+        <div style="margin-top:18px;overflow-x:auto">
+          <table>
+            <thead><tr><th>Dia</th><th>Atendida</th><th>Não atendida</th><th>Reunião</th><th>Proposta</th><th>Fechado</th><th>Perda</th><th>Obs.</th><th></th></tr></thead>
+            <tbody id="daily-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Criativos em veiculação</h2>
+      <div class="card">
+        <div class="bars" id="creative-bars" style="margin-bottom:18px"></div>
+        <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Criativo</th><th>Status</th><th>Investido (R$)</th><th>Leads entrados</th><th>Leads fechados</th><th></th></tr></thead>
+          <tbody id="creative-rows"></tbody>
+          <tfoot><tr><td>Total</td><td></td><td id="tot-spend">—</td><td id="tot-leads">—</td><td id="tot-closed">—</td><td></td></tr></tfoot>
+        </table>
+        </div>
+        <form class="inline" onsubmit="return addCreative(event)">
+          <label style="flex:1;min-width:220px">Novo criativo <input class="name-input" id="new-name" placeholder="ex: AD50 - novo criativo" required></label>
+          <label>Status
+            <select id="new-status"><option value="ativo">Ativo</option><option value="pausado">Pausado</option></select>
+          </label>
+          <button class="btn" type="submit">Adicionar criativo</button>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ynfepgjhfuseurylfgje.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_dsnC5XksUSWWGNXcpqBwfA_cM5mT60Y';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const fmtBRL = n => (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const fmtInt = n => (n||0).toLocaleString('pt-BR');
+const fmtPct = n => isFinite(n) ? (n*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%' : '—';
+
+function mondayOf(d){
+  const date = new Date(d);
+  const day = date.getDay(); // 0 = domingo
+  const diff = (day === 0 ? -6 : 1 - day);
+  date.setDate(date.getDate() + diff);
+  date.setHours(0,0,0,0);
+  return date;
+}
+function isoDate(d){ return d.toISOString().slice(0,10); }
+function addDays(d,n){ const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function fmtDateBR(d){ return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}); }
+
+let currentWeekStart = mondayOf(new Date());
+
+// ---------- AUTH ----------
+async function sendMagicLink(){
+  const email = document.getElementById('login-email').value.trim();
+  const msg = document.getElementById('login-msg');
+  if(!email){ msg.textContent = 'Digite um e-mail válido.'; return; }
+  msg.textContent = 'Enviando link...';
+  const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: window.location.href.split('#')[0] } });
+  msg.textContent = error ? ('Erro: '+error.message) : 'Link enviado! Verifique seu e-mail e clique no link para entrar.';
+}
+async function logout(){ await sb.auth.signOut(); location.reload(); }
+
+async function initAuth(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session){ showApp(session); }
+  sb.auth.onAuthStateChange((_event, session) => { if(session) showApp(session); });
+}
+function showApp(session){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-shell').style.display='block';
+  document.getElementById('user-email').textContent = session.user.email;
+  document.getElementById('df-day').valueAsDate = new Date();
+  renderWeek();
+}
+
+// ---------- WEEK NAV ----------
+function changeWeek(dir){ currentWeekStart = addDays(currentWeekStart, dir*7); renderWeek(); }
+function goToCurrentWeek(){ currentWeekStart = mondayOf(new Date()); renderWeek(); }
+
+async function renderWeek(){
+  const weekEnd = addDays(currentWeekStart,6);
+  document.getElementById('week-label').textContent = fmtDateBR(currentWeekStart)+' – '+fmtDateBR(weekEnd)+' de '+weekEnd.getFullYear();
+  await Promise.all([loadCreatives(), loadDailyFunnel()]);
+}
+
+// ---------- CREATIVES ----------
+async function loadCreatives(){
+  const weekStartIso = isoDate(currentWeekStart);
+  const { data: creatives, error } = await sb.from('creatives').select('*').order('created_at');
+  if(error){ console.error(error); return; }
+  const { data: metrics } = await sb.from('creative_weekly_metrics').select('*').eq('week_start', weekStartIso);
+  const metricsByCreative = {};
+  (metrics||[]).forEach(m => metricsByCreative[m.creative_id]=m);
+
+  const tbody = document.getElementById('creative-rows');
+  tbody.innerHTML='';
+  let totSpend=0, totLeads=0, totClosed=0;
+  const barData = [];
+
+  creatives.forEach(c => {
+    const m = metricsByCreative[c.id] || {spend:0, leads_in:0, leads_closed:0};
+    totSpend += Number(m.spend||0); totLeads += Number(m.leads_in||0); totClosed += Number(m.leads_closed||0);
+    barData.push({name:c.name, spend:Number(m.spend||0)});
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="name-input" value="${escapeHtml(c.name)}" onchange="updateCreativeField('${c.id}','name',this.value)"></td>
+      <td><select onchange="updateCreativeField('${c.id}','status',this.value)">
+            <option value="ativo" ${c.status==='ativo'?'selected':''}>Ativo</option>
+            <option value="pausado" ${c.status==='pausado'?'selected':''}>Pausado</option>
+          </select></td>
+      <td><input type="number" step="0.01" min="0" value="${m.spend||0}" onchange="updateMetricField('${c.id}','spend',this.value)"></td>
+      <td><input type="number" min="0" value="${m.leads_in||0}" onchange="updateMetricField('${c.id}','leads_in',this.value)"></td>
+      <td><input type="number" min="0" value="${m.leads_closed||0}" onchange="updateMetricField('${c.id}','leads_closed',this.value)"></td>
+      <td class="row-actions"><button class="btn danger small" onclick="deleteCreative('${c.id}')">Remover</button></td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('tot-spend').textContent = fmtBRL(totSpend);
+  document.getElementById('tot-leads').textContent = fmtInt(totLeads);
+  document.getElementById('tot-closed').textContent = fmtInt(totClosed);
+  document.getElementById('kpi-spend').textContent = fmtBRL(totSpend);
+
+  renderCreativeBars(barData);
+  updateFunnelWithLeads(totLeads, totClosed);
+}
+
+function renderCreativeBars(barData){
+  const wrap = document.getElementById('creative-bars');
+  wrap.innerHTML='';
+  const max = Math.max(1, ...barData.map(b=>b.spend));
+  barData.sort((a,b)=>b.spend-a.spend).slice(0,8).forEach(b=>{
+    const row = document.createElement('div');
+    row.className='bar-item';
+    row.innerHTML = `<div class="name" title="${escapeHtml(b.name)}">${escapeHtml(b.name)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(b.spend/max*100).toFixed(1)}%"></div></div>
+      <div class="val">${fmtBRL(b.spend)}</div>`;
+    wrap.appendChild(row);
+  });
+  if(barData.length===0){ wrap.innerHTML = '<div class="muted-small">Nenhum criativo cadastrado ainda.</div>'; }
+}
+
+async function updateCreativeField(id, field, value){
+  await sb.from('creatives').update({[field]: value}).eq('id', id);
+}
+async function updateMetricField(creativeId, field, value){
+  const weekStartIso = isoDate(currentWeekStart);
+  const payload = { creative_id: creativeId, week_start: weekStartIso, [field]: field==='spend'? Number(value) : parseInt(value||0) };
+  await sb.from('creative_weekly_metrics').upsert(payload, { onConflict:'creative_id,week_start' });
+  loadCreatives();
+}
+async function deleteCreative(id){
+  if(!confirm('Remover este criativo e todo o histórico de métricas dele?')) return;
+  await sb.from('creatives').delete().eq('id', id);
+  loadCreatives();
+}
+async function addCreative(ev){
+  ev.preventDefault();
+  const name = document.getElementById('new-name').value.trim();
+  const status = document.getElementById('new-status').value;
+  if(!name) return false;
+  await sb.from('creatives').insert({name, status});
+  document.getElementById('new-name').value='';
+  loadCreatives();
+  return false;
+}
+
+// ---------- DAILY FUNNEL ----------
+async function loadDailyFunnel(){
+  const weekStartIso = isoDate(currentWeekStart);
+  const weekEndIso = isoDate(addDays(currentWeekStart,6));
+  const { data, error } = await sb.from('daily_funnel').select('*').gte('day', weekStartIso).lte('day', weekEndIso).order('day');
+  if(error){ console.error(error); return; }
+  const tbody = document.getElementById('daily-rows');
+  tbody.innerHTML='';
+  const totals = {calls_answered:0,calls_not_answered:0,meetings_scheduled:0,proposals_presented:0,closed_won:0,closed_lost:0};
+  (data||[]).forEach(row=>{
+    Object.keys(totals).forEach(k=> totals[k]+=Number(row[k]||0));
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${fmtDateBR(new Date(row.day+'T00:00:00'))}</td>
+      <td>${row.calls_answered}</td><td>${row.calls_not_answered}</td><td>${row.meetings_scheduled}</td>
+      <td>${row.proposals_presented}</td><td>${row.closed_won}</td><td>${row.closed_lost}</td>
+      <td class="muted-small">${row.notes? escapeHtml(row.notes):''}</td>
+      <td><button class="btn secondary small" onclick="editDay('${row.day}')">Editar</button></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('kpi-calls').textContent = fmtInt(totals.calls_answered);
+  document.getElementById('kpi-meetings').textContent = fmtInt(totals.meetings_scheduled);
+  document.getElementById('kpi-proposals').textContent = fmtInt(totals.proposals_presented);
+  document.getElementById('kpi-won').textContent = fmtInt(totals.closed_won);
+  renderFunnelChart(totals);
+  window._weekTotals = totals;
+  refreshKpiSpend();
+}
+
+function editDay(day){
+  document.getElementById('df-day').value = day;
+  sb.from('daily_funnel').select('*').eq('day', day).single().then(({data})=>{
+    if(!data) return;
+    document.getElementById('df-answered').value = data.calls_answered;
+    document.getElementById('df-not-answered').value = data.calls_not_answered;
+    document.getElementById('df-meetings').value = data.meetings_scheduled;
+    document.getElementById('df-proposals').value = data.proposals_presented;
+    document.getElementById('df-won').value = data.closed_won;
+    document.getElementById('df-lost').value = data.closed_lost;
+    document.getElementById('df-notes').value = data.notes || '';
+  });
+}
+
+async function saveDailyFunnel(ev){
+  ev.preventDefault();
+  const payload = {
+    day: document.getElementById('df-day').value,
+    calls_answered: parseInt(document.getElementById('df-answered').value||0),
+    calls_not_answered: parseInt(document.getElementById('df-not-answered').value||0),
+    meetings_scheduled: parseInt(document.getElementById('df-meetings').value||0),
+    proposals_presented: parseInt(document.getElementById('df-proposals').value||0),
+    closed_won: parseInt(document.getElementById('df-won').value||0),
+    closed_lost: parseInt(document.getElementById('df-lost').value||0),
+    notes: document.getElementById('df-notes').value || null,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await sb.from('daily_funnel').upsert(payload, { onConflict:'day' });
+  if(error){ alert('Erro ao salvar: '+error.message); return false; }
+  loadDailyFunnel();
+  return false;
+}
+
+// ---------- KPIs & FUNNEL CHART ----------
+let _leadsTotal=0, _closedFromCreatives=0;
+function updateFunnelWithLeads(leads, closed){ _leadsTotal=leads; _closedFromCreatives=closed; renderFunnelChart(window._weekTotals||{}); }
+
+function renderFunnelChart(totals){
+  const leads = _leadsTotal;
+  const stages = [
+    {label:'Leads recebidos', value:leads, color:'var(--seq-250)'},
+    {label:'Ligação atendida', value:totals.calls_answered||0, color:'var(--seq-350)'},
+    {label:'Reunião marcada', value:totals.meetings_scheduled||0, color:'var(--seq-450)'},
+    {label:'Proposta apresentada', value:totals.proposals_presented||0, color:'var(--seq-550)'},
+    {label:'Fechamento (ganho)', value:totals.closed_won||0, color:'var(--seq-650)'}
+  ];
+  const max = Math.max(1, leads);
+  const wrap = document.getElementById('funnel-chart');
+  wrap.innerHTML='';
+  stages.forEach((s,i)=>{
+    const pct = i===0 ? null : (stages[i-1].value>0 ? s.value/stages[i-1].value : 0);
+    const row = document.createElement('div');
+    row.className='funnel-row';
+    row.innerHTML = `<div class="stage-label">${s.label}</div>
+      <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width:${Math.max(3,(s.value/max*100)).toFixed(1)}%;background:${s.color}">${fmtInt(s.value)}</div></div>
+      <div class="pct">${pct===null?'':'de '+fmtPct(pct)}</div>`;
+    wrap.appendChild(row);
+  });
+  const side = document.getElementById('funnel-side');
+  side.innerHTML = `
+    <div class="callout"><span class="dot" style="background:var(--critical)"></span>Ligações não atendidas: ${fmtInt(totals.calls_not_answered)}</div>
+    <div class="callout"><span class="dot" style="background:var(--serious)"></span>Propostas perdidas: ${fmtInt(totals.closed_lost)}</div>
+    <div class="callout"><span class="dot" style="background:var(--good)"></span>Leads fechados (por criativo): ${fmtInt(_closedFromCreatives)}</div>`;
+
+  document.getElementById('kpi-leads').textContent = fmtInt(leads);
+  const rate = leads>0 ? (totals.closed_won||0)/leads : NaN;
+  const rateEl = document.getElementById('kpi-rate');
+  rateEl.textContent = fmtPct(rate);
+}
+
+function refreshKpiSpend(){
+  // recompute from last loaded creative totals text (already set) — no-op placeholder for ordering
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+initAuth();
+</script>
+</body>
+</html>
